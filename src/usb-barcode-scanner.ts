@@ -7,6 +7,7 @@ import { getDevice, defaultHidMap, getDeviceByPath } from './usb-barcode-scanner
 export class UsbScanner extends EventEmitter implements onDataScanned {
     hid?: HID;
     hidMap: any;
+    bufferOffset: any;
 
     constructor(options: UsbScannerOptions, hidMap?: any) {
         super();
@@ -18,6 +19,8 @@ export class UsbScanner extends EventEmitter implements onDataScanned {
         } else if (options.vendorId && options.productId) {
             device = getDevice(options.vendorId, options.productId);
         }
+
+        this.bufferOffset = options.bufferOffset || 2;
 
         if (device === undefined) {
             console.warn(`Device not found, please provide a valid path or vendor/product combination.`);
@@ -46,15 +49,21 @@ export class UsbScanner extends EventEmitter implements onDataScanned {
 
         if (this.hid) {
             this.hid.on('data', (chunk) => {
-                if (this.hidMap[chunk[2]]) {
-                    if (chunk[2] !== 40) {
-                        bcodeBuffer.push(this.hidMap[chunk[2]]);
+                if (this.hidMap[chunk[this.bufferOffset]]) {
+                    if (chunk[this.bufferOffset] !== 40) {
+                        bcodeBuffer.push(this.hidMap[chunk[this.bufferOffset]]);
                     } else {
                         barcode = bcodeBuffer.join("");
                         bcodeBuffer = [];
 
                         this.emitDataScanned(barcode);
                     }
+                }
+            });
+            let self = this;
+            this.hid.on('error', error => {
+                if (self.hid) {
+                    self.hid.close();
                 }
             });
         }
@@ -68,5 +77,9 @@ export class UsbScanner extends EventEmitter implements onDataScanned {
 
     private emitDataScanned(data: string): void {
         this.emit('data', data)
+    }
+
+    private emitError(error: string): void {
+        this.emit('error', error);
     }
 }
